@@ -16,7 +16,7 @@
 # along with Cheesemaker.  If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 from PyQt5.QtCore import *
-from PyQt5.QtGui import QImage, QPixmap, QTransform, QPainter
+from PyQt5.QtGui import QImage, QPixmap, QTransform, QPainter, QIcon
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem,
         QMenu, QDialog, QFileDialog, QAction, QMessageBox, QFrame, QRubberBand, qApp)
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
@@ -40,10 +40,11 @@ class MainWindow(QMainWindow):
         self.img_view = ImageView(self)
         self.img_view.setScene(self.scene)
         self.setCentralWidget(self.img_view)
-
+        
         self.create_actions()
         self.create_menu()
         self.create_dict()
+        self.create_toolbar()
         self.slides_next = True
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -154,6 +155,20 @@ class MainWindow(QMainWindow):
                 '6': partial(self.img_rotate, 90),
                 '7': self.img_rotate_flipv,
                 '8': partial(self.img_rotate, 270)}
+
+    def create_toolbar(self):
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        def icon(icon_name):
+            return QIcon(os.path.join(script_dir, "assets", icon_name))
+        
+        self.toolbar = self.addToolBar("File")
+        action = QAction(icon("star.png"), "important", self)
+        action.triggered.connect(lambda : self.save_with_rating(100))
+        self.toolbar.addAction(action)
+        action = QAction(icon("hollow_star.png"), "non important", self)
+        action.triggered.connect(lambda : self.save_with_rating(0))
+        self.toolbar.addAction(action)
+
 
     def read_prefs(self):
         """Parse the preferences from the config file, or set default values."""
@@ -295,7 +310,7 @@ class MainWindow(QMainWindow):
             coords = self.img_view.get_coords()
             self.pixmap = self.pixmap.copy(*coords)
             self.load_img()
-        self.img_view.rband.hide()
+        #self.img_view.rband.hide()
 
     def toggle_fs(self):
         if self.fulls_act.isChecked():
@@ -349,6 +364,15 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, 'Error', 'Cannot save {} images.'.format(fname.rsplit('.', 1)[1]))
 
+    def save_with_rating(self, rating=100):
+        self.pixmap.save(self.fname, None, self.quality)
+        exif = GExiv2.Metadata(self.fname)
+        exif["Exif.Image.Rating"] = str(rating)
+        exif.save_file()
+        print("*** Rating %d" % rating)
+        for tag in exif.get_exif_tags():
+            print("EXIF %s =>%s" % (tag, exif[tag]))
+
     def print_img(self):
         dialog = QPrintDialog(self.printer, self)
         if dialog.exec_():
@@ -380,7 +404,8 @@ class MainWindow(QMainWindow):
     def about_cm(self):
         about_message = 'Version: 0.3.9\nAuthor: David Whitlock\nLicense: GPLv3'
         QMessageBox.about(self, 'About Cheesemaker', about_message)
-    
+
+
     def exit(self):
         QCoreApplication.quit()
 
