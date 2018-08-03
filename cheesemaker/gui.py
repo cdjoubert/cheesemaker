@@ -26,6 +26,7 @@ import os
 import sys
 import random
 import preferences, editimage
+import argparse
 
 class MainWindow(QMainWindow):
     def __init__(self, parent):
@@ -440,10 +441,10 @@ class ImageView(QGraphicsView):
         return (x, y, width, height)
 
 class ImageViewer(QApplication):
-    def __init__(self, args):
-        QApplication.__init__(self, args)
+    def __init__(self, qt_args, parsed_args):
+        QApplication.__init__(self, qt_args)
 
-        self.args = args
+        self.args = parsed_args
         self.read_list = ('bmp', 'gif', 'ico', 'jpg', 'jpeg', 'png', 'pbm',
                 'pgm', 'ppm', 'xbm', 'xpm', 'svg', 'svgz', 'mng', 'wbmp',
                 'tga', 'tif', 'tiff')
@@ -451,9 +452,8 @@ class ImageViewer(QApplication):
                 'wbmp', 'tif', 'tiff', 'ppm', 'xbm', 'xpm')
 
     def startup(self):
-        if len(self.args) > 1:
-            files = self.args[1:]
-            self.open_files(files)
+        if len(self.args.files) > 0:
+            self.open_files(self.args.files)
         else:
             self.open_win(None)
 
@@ -470,10 +470,17 @@ class ImageViewer(QApplication):
         else:
             win.open()
 
-def main():
-    app = ImageViewer(sys.argv)
+def main(qt_args, parsed_args):
+    app = ImageViewer(qt_args, parsed_args)
     app.startup()
     sys.exit(app.exec_())
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Image viewer")
+    parser.add_argument('files', nargs='*', help='Open file or directory')
+
+    # See: https://stackoverflow.com/a/21166631/2798802
+    parsed_args, unparsed_args = parser.parse_known_args()
+    qt_args = sys.argv[:1] + unparsed_args
+    
+    main(qt_args, parsed_args)
