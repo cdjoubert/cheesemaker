@@ -35,7 +35,6 @@ class MainWindow(QMainWindow):
         self.load_img = self.load_img_fit
         self.reload_img = self.reload_auto
         self.open_new = parent.open_win
-        self.exit = parent.closeAllWindows
         self.scene = QGraphicsScene()
         self.img_view = ImageView(self)
         self.img_view.setScene(self.scene)
@@ -380,6 +379,9 @@ class MainWindow(QMainWindow):
     def about_cm(self):
         about_message = 'Version: 0.3.9\nAuthor: David Whitlock\nLicense: GPLv3'
         QMessageBox.about(self, 'About Cheesemaker', about_message)
+    
+    def exit(self):
+        QCoreApplication.quit()
 
 class ImageView(QGraphicsView):
     def __init__(self, parent=None):
