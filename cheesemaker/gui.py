@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Cheesemaker.  If not, see <http://www.gnu.org/licenses/gpl.html>.
 
-from PyQt5.QtCore import Qt, QDir, QRect, QTimer
+from PyQt5.QtCore import *
 from PyQt5.QtGui import QImage, QPixmap, QTransform, QPainter
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem,
         QMenu, QDialog, QFileDialog, QAction, QMessageBox, QFrame, QRubberBand, qApp)
@@ -25,7 +25,7 @@ from functools import partial
 import os
 import sys
 import random
-from . import preferences, editimage
+import preferences, editimage
 
 class MainWindow(QMainWindow):
     def __init__(self, parent):
