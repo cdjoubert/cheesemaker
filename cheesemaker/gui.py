@@ -16,10 +16,12 @@
 # along with Cheesemaker.  If not, see <http://www.gnu.org/licenses/gpl.html>.
 
 from PyQt5.QtCore import *
-from PyQt5.QtGui import QImage, QPixmap, QTransform, QPainter, QIcon
+from PyQt5.QtGui import QImage, QPixmap, QTransform, QPainter, QIcon, QCursor
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem,
         QMenu, QDialog, QFileDialog, QAction, QMessageBox, QFrame, QRubberBand, qApp)
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
+from PyQt5.QtCore import pyqtRemoveInputHook
+import pdb
 from gi.repository import GExiv2
 from functools import partial
 import os
@@ -27,6 +29,14 @@ import sys
 import random
 import preferences, editimage
 import argparse
+
+# For debug, could be erased after
+def trace(cond=True):
+    pdb_obj = pdb.Pdb()
+    if cond:
+        pyqtRemoveInputHook()
+        pdb_obj.set_trace(sys._getframe(1))
+
 
 class MainWindow(QMainWindow):
     def __init__(self, parent):
@@ -303,14 +313,21 @@ class MainWindow(QMainWindow):
                     Qt.SmoothTransformation)
             self.save_img()
 
-    def crop_img(self):
+    def crop_img_old(self):
         self.img_view.setup_crop(self.pixmap.width(), self.pixmap.height())
         dialog = editimage.CropDialog(self, self.pixmap.width(), self.pixmap.height())
         if dialog.exec_() == QDialog.Accepted:
             coords = self.img_view.get_coords()
             self.pixmap = self.pixmap.copy(*coords)
             self.load_img()
-        #self.img_view.rband.hide()
+        self.img_view.rband.hide()
+    
+    def crop_img(self):
+        def callback(coords):
+            print("CB2 ", coords)
+            self.pixmap = self.pixmap.copy(*coords)
+            self.load_img()
+        self.img_view.crop(callback)
 
     def toggle_fs(self):
         if self.fulls_act.isChecked():
@@ -369,9 +386,9 @@ class MainWindow(QMainWindow):
         exif = GExiv2.Metadata(self.fname)
         exif["Exif.Image.Rating"] = str(rating)
         exif.save_file()
-        print("*** Rating %d" % rating)
-        for tag in exif.get_exif_tags():
-            print("EXIF %s =>%s" % (tag, exif[tag]))
+        #print("*** Rating %d" % rating)
+        #for tag in exif.get_exif_tags():
+            #print("EXIF %s =>%s" % (tag, exif[tag]))
 
     def print_img(self):
         dialog = QPrintDialog(self.printer, self)
@@ -410,6 +427,11 @@ class MainWindow(QMainWindow):
         QCoreApplication.quit()
 
 class ImageView(QGraphicsView):
+    @staticmethod
+    def close_enough(point1, point2):
+        d = 20
+        return abs(point1.x() - point2.x()) < d and abs(point1.y() - point2.y()) < d
+        
     def __init__(self, parent=None):
         QGraphicsView.__init__(self, parent)
 
@@ -420,22 +442,99 @@ class ImageView(QGraphicsView):
         pal.setColor(self.backgroundRole(), Qt.black)
         self.setPalette(pal)
         self.setFrameShape(QFrame.NoFrame)
+        
+        self.rband = None
+        self.rband_state = None
+        self.rband_corner = None # If mouse is over a corner
+        self.rband_origin = QPoint()
+        self.rband_endpoint = QPoint()
 
     def mousePressEvent(self, event):
         """Go to the next / previous image, or be able to drag the image with a hand."""
-        if event.button() == Qt.LeftButton:
-            x = event.x()
-            if x < 100:
-                self.go_prev_img()
-            elif x > self.width() - 100:
-                self.go_next_img()
-            else:
-                self.setDragMode(QGraphicsView.ScrollHandDrag)
+        if self.rband_state == "initial":
+            self.rband = QRubberBand(QRubberBand.Rectangle, self)
+            self.rband_origin = event.pos()
+            self.rband.setGeometry(QRect(self.rband_origin, QSize()))
+            self.rband.show()
+            self.rband_state = "set-endpoint"
+        elif self.rband_state == "drawn":
+            if self.rband_corner == "nw":
+                self.rband_state = "set-origin"
+            elif self.rband_corner == "se":
+                self.rband_state = "set-endpoint"
+            elif self.rband_corner == "inside":
+                self.rband_state = "move"
+                self.setCursor(QCursor(Qt.ClosedHandCursor))
+                self.rband_previous_pos = event.pos()
+        else:
+            if event.button() == Qt.LeftButton:
+                x = event.x()
+                if x < 100:
+                    self.go_prev_img()
+                elif x > self.width() - 100:
+                    self.go_next_img()
+                else:
+                    self.setDragMode(QGraphicsView.ScrollHandDrag)
         QGraphicsView.mousePressEvent(self, event)
-
+    
+    def mouseMoveEvent(self, event):
+        if self.rband_state == "set-endpoint":
+            self.rband.setGeometry(QRect(self.rband_origin, event.pos()).normalized())
+            self.rband_endpoint = event.pos()
+        elif self.rband_state == "set-origin":
+            self.rband.setGeometry(QRect(event.pos(), self.rband_endpoint).normalized())
+            self.rband_origin = event.pos()
+        elif self.rband_state == "move":
+            old_pos = self.rband.geometry()
+            new_pos = old_pos.translated(event.pos() - self.rband_previous_pos)
+            trace(0)
+            self.rband.setGeometry(new_pos)
+            self.rband_previous_pos = event.pos()
+        elif self.rband_state == "drawn":
+            if ImageView.close_enough(self.rband_origin, event.pos()):
+                self.rband_corner = "nw"
+                self.setCursor(QCursor(Qt.SizeFDiagCursor))
+            elif ImageView.close_enough(self.rband_endpoint, event.pos()):
+                self.rband_corner = "se"
+                self.setCursor(QCursor(Qt.SizeFDiagCursor))
+            elif self.rband.geometry().contains(event.pos()):
+                self.rband_corner = "inside"
+                self.setCursor(QCursor(Qt.OpenHandCursor))
+            else:
+                self.rband_corner = None
+                self.setCursor(QCursor(Qt.ArrowCursor))
+        QGraphicsView.mouseMoveEvent(self, event)
+            
     def mouseReleaseEvent(self, event):
-        self.setDragMode(QGraphicsView.NoDrag)
+        #print("State %s", self.rband_state)
+        if self.rband_state == "set-endpoint" or self.rband_state == "set-origin":
+            self.rband_state = "drawn"
+        elif self.rband_state == "move":
+            self.setCursor(QCursor(Qt.ArrowCursor))
+            self.rband_state = "drawn"
+            self.rband_origin = self.rband.geometry().topLeft()
+            self.rband_endpoint = self.rband.geometry().bottomRight()
+        else:
+            self.setCursor(QCursor(Qt.ArrowCursor))
+            self.setDragMode(QGraphicsView.NoDrag)
         QGraphicsView.mouseReleaseEvent(self, event)
+    
+    def keyPressEvent(self, event):
+        if self.rband_state == "drawn":
+            if event.key() == Qt.Key_Escape:
+                self.setCursor(QCursor(Qt.ArrowCursor))
+                self.rband.hide()
+                self.rband_state = None
+                self.setMouseTracking(False)
+            elif event.key() in [Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space]:
+                self.setCursor(QCursor(Qt.ArrowCursor))
+                self.rband.hide()
+                self.rband_state = None
+                self.setMouseTracking(False)
+                #print("CB ", self.get_coords())
+                self.crop_callback(self.get_coords())
+        event.accept()
+        
 
     def zoom(self, zoomratio):
         self.scale(zoomratio, zoomratio)
@@ -445,6 +544,11 @@ class ImageView(QGraphicsView):
         if event.angleDelta().y() < 0:
             zoomratio = 1.0 / zoomratio
         self.scale(zoomratio, zoomratio)
+
+    def crop(self, callback):
+        self.crop_callback = callback
+        self.rband_state = "initial"
+        self.setMouseTracking(True)
 
     def setup_crop(self, width, height):
         self.rband = QRubberBand(QRubberBand.Rectangle, self)
