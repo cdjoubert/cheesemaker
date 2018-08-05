@@ -76,7 +76,7 @@ class MainWindow(QMainWindow):
         self.print_act = QAction('&Print', self, shortcut='Ctrl+P')
         self.print_act.triggered.connect(self.print_img)
         self.save_act = QAction('&Save image', self, shortcut='Ctrl+S')
-        self.save_act.triggered.connect(self.save_img)
+        self.save_act.triggered.connect(self.save_img_as)
         self.close_act = QAction('Close window', self, shortcut='Ctrl+W')
         self.close_act.triggered.connect(self.close)
         self.exit_act = QAction('E&xit', self, shortcut='Ctrl+Q')
@@ -171,13 +171,16 @@ class MainWindow(QMainWindow):
         def icon(icon_name):
             return QIcon(os.path.join(script_dir, "assets", icon_name))
         
+        def add_action(description, icon_file, function):
+            action = QAction(icon(icon_file), description, self)
+            action.triggered.connect(function)
+            self.toolbar.addAction(action)
+        
         self.toolbar = self.addToolBar("File")
-        action = QAction(icon("star.png"), "important", self)
-        action.triggered.connect(lambda : self.save_with_rating(100))
-        self.toolbar.addAction(action)
-        action = QAction(icon("hollow_star.png"), "non important", self)
-        action.triggered.connect(lambda : self.save_with_rating(0))
-        self.toolbar.addAction(action)
+        add_action("save", "save.png", self.save_img)
+        add_action("crop", "crop.png", self.crop_img)
+        add_action("save important", "star.png", lambda : self.save_img(rating=100))
+        add_action("save non important", "hollow_star.png", lambda : self.save_img(rating=0))
 
 
     def read_prefs(self):
@@ -312,15 +315,6 @@ class MainWindow(QMainWindow):
             self.pixmap = self.pixmap.scaled(width, height, Qt.IgnoreAspectRatio,
                     Qt.SmoothTransformation)
             self.save_img()
-
-    def crop_img_old(self):
-        self.img_view.setup_crop(self.pixmap.width(), self.pixmap.height())
-        dialog = editimage.CropDialog(self, self.pixmap.width(), self.pixmap.height())
-        if dialog.exec_() == QDialog.Accepted:
-            coords = self.img_view.get_coords()
-            self.pixmap = self.pixmap.copy(*coords)
-            self.load_img()
-        self.img_view.rband.hide()
     
     def crop_img(self):
         def callback(coords):
@@ -362,7 +356,7 @@ class MainWindow(QMainWindow):
     def set_slide_type(self):
         self.slides_next = self.ss_next_act.isChecked()
 
-    def save_img(self):
+    def save_img_as(self):
         fname = QFileDialog.getSaveFileName(self, 'Save your image', self.fname)[0]
         if fname:
             if fname.lower().endswith(self.write_list):
@@ -381,14 +375,14 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, 'Error', 'Cannot save {} images.'.format(fname.rsplit('.', 1)[1]))
 
-    def save_with_rating(self, rating=100):
+    def save_img(self, rating=None):
         self.pixmap.save(self.fname, None, self.quality)
         exif = GExiv2.Metadata(self.fname)
-        exif["Exif.Image.Rating"] = str(rating)
-        exif.save_file()
-        #print("*** Rating %d" % rating)
-        #for tag in exif.get_exif_tags():
-            #print("EXIF %s =>%s" % (tag, exif[tag]))
+        if exif:
+            if rating is not None:
+                exif["Exif.Image.Rating"] = str(rating)
+            exif.save_file()
+
 
     def print_img(self):
         dialog = QPrintDialog(self.printer, self)
@@ -549,16 +543,6 @@ class ImageView(QGraphicsView):
         self.crop_callback = callback
         self.rband_state = "initial"
         self.setMouseTracking(True)
-
-    def setup_crop(self, width, height):
-        self.rband = QRubberBand(QRubberBand.Rectangle, self)
-        coords = self.mapFromScene(0, 0, width, height)
-        self.rband.setGeometry(QRect(coords.boundingRect()))
-        self.rband.show()
-
-    def crop_draw(self, x, y, width, height):
-        coords = self.mapFromScene(x, y, width, height)
-        self.rband.setGeometry(QRect(coords.boundingRect()))
 
     def get_coords(self):
         rect = self.rband.geometry()
