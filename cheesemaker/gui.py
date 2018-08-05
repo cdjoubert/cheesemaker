@@ -179,6 +179,7 @@ class MainWindow(QMainWindow):
         self.toolbar = self.addToolBar("File")
         add_action("save", "save.png", self.save_img)
         add_action("crop", "crop.png", self.crop_img)
+        add_action("resize", "resize.png", self.resize_img)
         add_action("save important", "star.png", lambda : self.save_img(rating=100))
         add_action("save non important", "hollow_star.png", lambda : self.save_img(rating=0))
 
@@ -234,11 +235,15 @@ class MainWindow(QMainWindow):
         self.filelist.sort()
         self.last_file = len(self.filelist) - 1
 
+    def set_title(self):
+        file_name = self.fname.rsplit('/', 1)[1]
+        size = " [%d x %d]" % (self.pixmap.width(), self.pixmap.height())
+        self.setWindowTitle(file_name + size)
+
     def get_img(self):
         """Get image from fname and create pixmap."""
         image = QImage(self.fname)
         self.pixmap = QPixmap.fromImage(image)
-        self.setWindowTitle(self.fname.rsplit('/', 1)[1])
 
     def reload_auto(self):
         """Load a new image with auto-orientation."""
@@ -260,6 +265,7 @@ class MainWindow(QMainWindow):
         self.scene.addPixmap(self.pixmap)
         self.scene.setSceneRect(0, 0, self.pixmap.width(), self.pixmap.height())
         self.img_view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+        self.set_title()
 
     def load_img_1to1(self):
         """Load the image at its original size."""
@@ -269,6 +275,7 @@ class MainWindow(QMainWindow):
         self.scene.setSceneRect(0, 0, self.pixmap.width(), self.pixmap.height())
         pixitem = QGraphicsPixmapItem(self.pixmap)
         self.img_view.centerOn(pixitem)
+        self.set_title()
 
     def go_next_img(self):
         self.img_index = self.img_index + 1 if self.img_index < self.last_file else 0
@@ -314,11 +321,10 @@ class MainWindow(QMainWindow):
             height = dialog.get_height.value()
             self.pixmap = self.pixmap.scaled(width, height, Qt.IgnoreAspectRatio,
                     Qt.SmoothTransformation)
-            self.save_img()
+            self.load_img()
     
     def crop_img(self):
         def callback(coords):
-            print("CB2 ", coords)
             self.pixmap = self.pixmap.copy(*coords)
             self.load_img()
         self.img_view.crop(callback)
