@@ -370,8 +370,8 @@ class MainWindow(QMainWindow):
                         'Do you want to save the picture metadata?', QMessageBox.Yes |
                         QMessageBox.No, QMessageBox.Yes)
                 if keep_exif == QMessageBox.Yes:
-                    self.pixmap.save(fname, None, self.quality)
                     exif = GExiv2.Metadata(self.fname)
+                    self.pixmap.save(fname, None, self.quality)
                     if exif:
                         saved_exif = GExiv2.Metadata(fname)
                         for tag in exif.get_exif_tags():
@@ -382,13 +382,12 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, 'Error', 'Cannot save {} images.'.format(fname.rsplit('.', 1)[1]))
 
     def save_img(self, rating=None):
-        self.pixmap.save(self.fname, None, self.quality)
         exif = GExiv2.Metadata(self.fname)
+        self.pixmap.save(self.fname, None, self.quality)
+        if rating is not None:
+            exif["Exif.Image.Rating"] = str(rating)
         if exif:
-            if rating is not None:
-                exif["Exif.Image.Rating"] = str(rating)
             exif.save_file()
-
 
     def print_img(self):
         dialog = QPrintDialog(self.printer, self)
