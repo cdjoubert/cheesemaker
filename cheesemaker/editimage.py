@@ -61,7 +61,7 @@ class ResizeDialog(QDialog):
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
-        self.set_predefined_sizes(main_layout, [1000, 800, 640, 320])
+        self.set_predefined_sizes(main_layout, [1600, 1200, 1000, 800, 640, 320, 200])
         self.set_resize_view(main_layout, width, height)
         self.set_aspratio_view(main_layout)
 
